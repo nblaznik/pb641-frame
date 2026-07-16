@@ -27,7 +27,6 @@ static int poll_seconds = DEFAULT_POLL_SECONDS;
 
 struct Config {
     std::string server_url;
-    std::string token;
     int interval_seconds;
 
     Config() : interval_seconds(DEFAULT_POLL_SECONDS) {}
@@ -76,24 +75,6 @@ static bool write_binary_file(const char* path, const void* data, int size)
     return output.good();
 }
 
-static std::string url_encode(const std::string& value)
-{
-    static const char HEX[] = "0123456789ABCDEF";
-    std::string encoded;
-    for (std::string::const_iterator it = value.begin(); it != value.end(); ++it) {
-        const unsigned char c = static_cast<unsigned char>(*it);
-        if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
-            (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.' || c == '~') {
-            encoded += static_cast<char>(c);
-        } else {
-            encoded += '%';
-            encoded += HEX[c >> 4];
-            encoded += HEX[c & 15];
-        }
-    }
-    return encoded;
-}
-
 static bool load_config(Config* config, std::string* error)
 {
     std::ifstream input(CONFIG_PATH);
@@ -116,8 +97,6 @@ static bool load_config(Config* config, std::string* error)
         const std::string value = trim(line.substr(separator + 1));
         if (key == "server_url") {
             config->server_url = value;
-        } else if (key == "token") {
-            config->token = value;
         } else if (key == "poll_seconds") {
             config->interval_seconds = std::atoi(value.c_str());
         }
@@ -126,8 +105,8 @@ static bool load_config(Config* config, std::string* error)
     while (!config->server_url.empty() && config->server_url[config->server_url.size() - 1] == '/') {
         config->server_url.erase(config->server_url.size() - 1);
     }
-    if (config->server_url.empty() || config->token.empty()) {
-        *error = "Configuration must contain server_url and token.";
+    if (config->server_url.empty()) {
+        *error = "Configuration must contain server_url.";
         return false;
     }
     if (config->interval_seconds < 60) {
@@ -243,9 +222,8 @@ static void poll_server()
         return;
     }
 
-    const std::string query = "?token=" + url_encode(config.token);
     std::string remote_revision;
-    if (!download_revision(config.server_url + "/api/revision" + query,
+    if (!download_revision(config.server_url + "/api/revision",
                            &remote_revision)) {
         finish_poll();
         return;
@@ -258,7 +236,7 @@ static void poll_server()
         return;
     }
 
-    if (download_image(config.server_url + "/api/image" + query)) {
+    if (download_image(config.server_url + "/api/image?revision=" + remote_revision)) {
         ibitmap* validation = LoadJPEG(TEMP_IMAGE_PATH, ScreenWidth(), ScreenHeight(), 100, 100, 1);
         if (validation != NULL) {
             std::free(validation);

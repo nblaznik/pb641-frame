@@ -12,5 +12,16 @@
       "binding": "FRAME_DATA",
       "id": "7a1edefcd76c4b8d91126011fa8b0660"
     }
-  ]
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "pb641-frame",
+      "database_id": "39e19da8-f1e3-4293-836b-d25dfc035636",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "triggers": {
+    "crons": ["0 * * * *"]
+  }
 }
