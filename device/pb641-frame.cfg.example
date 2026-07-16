@@ -1,0 +1,8 @@
+# Public HTTPS origin of the drawing server, without a trailing slash.
+server_url=https://frame.example.com
+
+# Must match FRAME_TOKEN on the server.
+token=replace-with-a-long-random-token
+
+# Values below 60 seconds are clamped to 60 to protect the battery.
+poll_seconds=300

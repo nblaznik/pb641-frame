@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PocketBook Frame</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #1a1916;
+      --paper: #f3efe4;
+      --accent: #db5b35;
+      --line: #cfc7b7;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: Georgia, "Times New Roman", serif;
+    }
+    main {
+      width: min(1100px, 100%);
+      margin: 0 auto;
+      padding: 28px 20px 48px;
+      display: grid;
+      grid-template-columns: minmax(0, 758px) 260px;
+      gap: 28px;
+      align-items: start;
+    }
+    header { margin-bottom: 18px; }
+    h1 { margin: 0; font-size: clamp(2rem, 6vw, 4.8rem); line-height: .85; letter-spacing: -.055em; }
+    .eyebrow { margin: 0 0 10px; font: 700 .72rem/1.2 Arial, sans-serif; letter-spacing: .18em; text-transform: uppercase; color: var(--accent); }
+    .canvas-shell { background: #fff; border: 1px solid var(--ink); box-shadow: 10px 10px 0 var(--ink); touch-action: none; }
+    canvas { display: block; width: 100%; height: auto; cursor: crosshair; }
+    aside { position: sticky; top: 20px; padding-top: 14px; border-top: 5px solid var(--ink); }
+    label, button, input { font-family: Arial, sans-serif; }
+    label { display: block; margin: 18px 0 7px; font-size: .75rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+    input[type="password"] { width: 100%; padding: 11px; border: 1px solid var(--ink); border-radius: 0; background: #fff; font-size: 1rem; }
+    input[type="range"] { width: 100%; accent-color: var(--accent); }
+    .tools { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 18px; }
+    button { border: 1px solid var(--ink); padding: 11px 10px; background: transparent; color: var(--ink); font-weight: 700; cursor: pointer; }
+    button.active { background: var(--ink); color: var(--paper); }
+    button.primary { width: 100%; margin-top: 24px; padding: 15px; border-color: var(--accent); background: var(--accent); color: #fff; font-size: 1rem; }
+    button:disabled { opacity: .5; cursor: wait; }
+    #status { min-height: 2.8em; margin: 12px 0 0; font: .85rem/1.4 Arial, sans-serif; }
+    .note { margin-top: 28px; padding-top: 12px; border-top: 1px solid var(--line); font-size: .85rem; line-height: 1.5; }
+    @media (max-width: 760px) {
+      main { padding: 20px 14px 36px; grid-template-columns: 1fr; gap: 24px; }
+      aside { position: static; }
+      .canvas-shell { box-shadow: 6px 6px 0 var(--ink); }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section>
+      <header>
+        <p class="eyebrow">758 × 1024 pixels · live e-ink delivery</p>
+        <h1>Draw for<br>the frame.</h1>
+      </header>
+      <div class="canvas-shell"><canvas id="drawing" width="758" height="1024"></canvas></div>
+    </section>
+    <aside>
+      <label for="token">Private access code</label>
+      <input id="token" type="password" autocomplete="current-password" placeholder="Shared token">
+
+      <label for="width">Stroke width</label>
+      <input id="width" type="range" min="2" max="40" value="9">
+
+      <div class="tools">
+        <button id="pen" class="active" type="button">Pen</button>
+        <button id="eraser" type="button">Eraser</button>
+        <button id="clear" type="button">Clear</button>
+        <button id="undo" type="button">Undo</button>
+      </div>
+
+      <button id="send" class="primary" type="button">Send to PocketBook</button>
+      <p id="status" role="status"></p>
+      <p class="note">The frame checks periodically. Sending the same drawing twice does not trigger another E-Ink refresh.</p>
+    </aside>
+  </main>
+  <script>
+    const canvas = document.querySelector('#drawing');
+    const context = canvas.getContext('2d', { alpha: false });
+    const token = document.querySelector('#token');
+    const width = document.querySelector('#width');
+    const pen = document.querySelector('#pen');
+    const eraser = document.querySelector('#eraser');
+    const clear = document.querySelector('#clear');
+    const undo = document.querySelector('#undo');
+    const send = document.querySelector('#send');
+    const status = document.querySelector('#status');
+    const history = [];
+    let drawing = false;
+    let erasing = false;
+
+    context.fillStyle = '#fff';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.lineCap = 'round';
+    context.lineJoin = 'round';
+
+    function point(event) {
+      const rect = canvas.getBoundingClientRect();
+      return {
+        x: (event.clientX - rect.left) * canvas.width / rect.width,
+        y: (event.clientY - rect.top) * canvas.height / rect.height,
+      };
+    }
+
+    function remember() {
+      history.push(context.getImageData(0, 0, canvas.width, canvas.height));
+      if (history.length > 10) history.shift();
+    }
+
+    canvas.addEventListener('pointerdown', (event) => {
+      remember();
+      drawing = true;
+      canvas.setPointerCapture(event.pointerId);
+      const start = point(event);
+      context.beginPath();
+      context.moveTo(start.x, start.y);
+    });
+    canvas.addEventListener('pointermove', (event) => {
+      if (!drawing) return;
+      const next = point(event);
+      context.strokeStyle = erasing ? '#fff' : '#111';
+      context.lineWidth = Number(width.value);
+      context.lineTo(next.x, next.y);
+      context.stroke();
+    });
+    canvas.addEventListener('pointerup', () => { drawing = false; });
+    canvas.addEventListener('pointercancel', () => { drawing = false; });
+
+    function setTool(useEraser) {
+      erasing = useEraser;
+      pen.classList.toggle('active', !useEraser);
+      eraser.classList.toggle('active', useEraser);
+    }
+    pen.addEventListener('click', () => setTool(false));
+    eraser.addEventListener('click', () => setTool(true));
+    clear.addEventListener('click', () => {
+      remember();
+      context.fillStyle = '#fff';
+      context.fillRect(0, 0, canvas.width, canvas.height);
+    });
+    undo.addEventListener('click', () => {
+      const previous = history.pop();
+      if (previous) context.putImageData(previous, 0, 0);
+    });
+
+    send.addEventListener('click', () => {
+      if (!token.value) {
+        status.textContent = 'Enter the private access code first.';
+        token.focus();
+        return;
+      }
+      send.disabled = true;
+      status.textContent = 'Sending…';
+      canvas.toBlob(async (blob) => {
+        try {
+          const response = await fetch('/api/image', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token.value}`, 'Content-Type': 'image/jpeg' },
+            body: blob,
+          });
+          if (!response.ok) throw new Error(response.status === 401 ? 'Incorrect access code.' : `Server error (${response.status}).`);
+          const result = await response.json();
+          status.textContent = result.changed ? 'Sent. The frame will pick it up shortly.' : 'Already sent. Nothing changed.';
+        } catch (error) {
+          status.textContent = error.message;
+        } finally {
+          send.disabled = false;
+        }
+      }, 'image/jpeg', 0.92);
+    });
+  </script>
+</body>
+</html>
