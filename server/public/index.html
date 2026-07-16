@@ -31,6 +31,10 @@
     aside { position:sticky; top:20px; border-top:5px solid var(--ink); padding-top:5px; }
     input[type="range"] { width:100%; accent-color:var(--accent); }
     .tools { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:18px; }
+    .shades { display:grid; grid-template-columns:repeat(5,1fr); gap:7px; }
+    .shade { position:relative; aspect-ratio:1; padding:0; border:2px solid transparent; background:var(--shade); }
+    .shade::after { content:""; position:absolute; inset:4px; border:1px solid rgba(0,0,0,.22); }
+    .shade.active { border-color:var(--accent); outline:2px solid var(--paper); outline-offset:-4px; }
     .submit { width:100%; margin-top:24px; padding:15px; }
     .status { min-height:2.8em; margin:12px 0 0; font:.86rem/1.4 Arial,sans-serif; }
     .note { margin-top:22px; padding-top:12px; border-top:1px solid var(--line); font-size:.88rem; line-height:1.5; }
@@ -77,6 +81,14 @@
         <label for="artist">Your name</label><input id="artist" type="text" maxlength="80" placeholder="Required">
         <label for="location">Your location</label><input id="location" type="text" maxlength="120" placeholder="Optional, e.g. Ljubljana">
         <label for="width">Stroke width</label><input id="width" type="range" min="2" max="40" value="9">
+        <label>Ink shade</label>
+        <div class="shades" aria-label="Choose an ink shade">
+          <button class="shade active" style="--shade:#111" data-color="#111" type="button" aria-label="Black"></button>
+          <button class="shade" style="--shade:#444" data-color="#444" type="button" aria-label="Dark gray"></button>
+          <button class="shade" style="--shade:#777" data-color="#777" type="button" aria-label="Mid gray"></button>
+          <button class="shade" style="--shade:#aaa" data-color="#aaa" type="button" aria-label="Light gray"></button>
+          <button class="shade" style="--shade:#ddd" data-color="#ddd" type="button" aria-label="Pale gray"></button>
+        </div>
         <div class="tools">
           <button id="pen" class="active" type="button">Pen</button><button id="eraser" type="button">Eraser</button>
           <button id="clear" type="button">Clear</button><button id="undo" type="button">Undo</button>
@@ -114,6 +126,7 @@
     const history = [];
     let drawing = false;
     let erasing = false;
+    let drawingColor = '#111';
     let imageUrls = [];
 
     context.fillStyle = '#fff';
@@ -135,7 +148,7 @@
     });
     canvas.addEventListener('pointermove',(event)=>{
       if(!drawing)return; const next=point(event);
-      context.strokeStyle=erasing?'#fff':'#111'; context.lineWidth=Number(width.value);
+      context.strokeStyle=erasing?'#fff':drawingColor; context.lineWidth=Number(width.value);
       context.lineTo(next.x,next.y); context.stroke();
     });
     canvas.addEventListener('pointerup',()=>{drawing=false;});
@@ -146,6 +159,11 @@
     }
     $('#pen').addEventListener('click',()=>setTool(false));
     $('#eraser').addEventListener('click',()=>setTool(true));
+    document.querySelectorAll('.shade').forEach((button)=>button.addEventListener('click',()=>{
+      drawingColor=button.dataset.color;
+      document.querySelectorAll('.shade').forEach((shade)=>shade.classList.toggle('active',shade===button));
+      setTool(false);
+    }));
     $('#clear').addEventListener('click',()=>{remember();context.fillStyle='#fff';context.fillRect(0,0,canvas.width,canvas.height);});
     $('#undo').addEventListener('click',()=>{const previous=history.pop();if(previous)context.putImageData(previous,0,0);});
 
