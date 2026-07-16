@@ -73,10 +73,10 @@ server_url=https://pb641-frame.blaznik-nejc.workers.dev
 poll_seconds=300
 ```
 
-Connect the PocketBook to Wi-Fi through its normal settings first so it has a saved default network. Launch `PB641Frame.app`; it caches the latest winner at `/mnt/ext1/My pictures/PB641Frame/latest.jpg`. Tap the screen to toggle the frontlight between off and maximum brightness. Press Back to exit; the app restores the frontlight setting that was active when it launched.
+Connect the PocketBook to Wi-Fi through its normal settings first so it has a saved default network. Launch `PB641Frame.app`; it caches the latest winner at `/mnt/ext1/My pictures/PB641Frame/latest.jpg`. While running, the app blocks standby, the screensaver, and timed poweroff so the frame remains visible continuously. Tap the screen to toggle the frontlight between off and maximum brightness. Press Back to exit; the app restores the sleep policy and frontlight setting that were active when it launched.
 
 ## Polling And Power
 
 Each poll powers Wi-Fi on, connects using the saved PocketBook network, and fetches the published image revision. It downloads the JPEG and performs a full E-Ink refresh only when that revision changes, then disconnects and powers Wi-Fi off. Failed polls leave the current image untouched.
 
-The app uses an InkView hard timer while its event loop is active. The public SDK does not provide a reliable scheduled wake-from-suspend API, and PB641 firmware behavior varies. Automatic checks during true device suspend therefore require physical-device testing.
+The app uses an InkView hard timer and renews its sleep ban every 30 seconds. Continuous operation and especially maximum frontlight brightness increase power consumption; keeping the PocketBook connected to power is recommended for permanent installation.

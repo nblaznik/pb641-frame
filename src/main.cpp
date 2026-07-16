@@ -15,6 +15,7 @@ static const char* IMAGE_PATH = "/mnt/ext1/My pictures/PB641Frame/latest.jpg";
 static const char* TEMP_IMAGE_PATH = "/mnt/ext1/My pictures/PB641Frame/latest.tmp";
 static const char* REVISION_PATH = "/mnt/ext1/system/state/pb641-frame.revision";
 static const char* POLL_TIMER = "pb641-frame-poll";
+static const char* KEEP_AWAKE_TIMER = "pb641-frame-awake";
 static const int DEFAULT_POLL_SECONDS = 300;
 static const int DOWNLOAD_TIMEOUT_SECONDS = 30;
 static const int MAX_IMAGE_BYTES = 8 * 1024 * 1024;
@@ -27,6 +28,7 @@ static int poll_seconds = DEFAULT_POLL_SECONDS;
 static int initial_frontlight_state = 0;
 static int initial_frontlight_enabled = 0;
 static bool frontlight_available = false;
+static int initial_sleep_mode = 1;
 
 struct Config {
     std::string server_url;
@@ -157,6 +159,14 @@ static bool draw_image(const char* path)
 }
 
 static void schedule_poll(int delay_seconds);
+
+static void keep_awake()
+{
+    iv_sleepmode(0);
+    BanSleep(90);
+    PostponeTimedPoweroff();
+    SetHardTimer(KEEP_AWAKE_TIMER, keep_awake, 30000);
+}
 
 static void toggle_frontlight()
 {
@@ -291,6 +301,8 @@ static int event_handler(int type, int par1, int par2)
                 initial_frontlight_state = GetFrontlightState();
                 initial_frontlight_enabled = GetFrontlightEnabled();
             }
+            initial_sleep_mode = GetSleepmode();
+            keep_awake();
             mkdir(IMAGE_DIR, 0755);
             if (!draw_image(IMAGE_PATH)) {
                 draw_message("PocketBook Frame", "Waiting for the first drawing...");
@@ -317,6 +329,8 @@ static int event_handler(int type, int par1, int par2)
 
         case EVT_EXIT:
             ClearTimerByName(POLL_TIMER);
+            ClearTimerByName(KEEP_AWAKE_TIMER);
+            iv_sleepmode(initial_sleep_mode);
             NetDisconnect();
             WiFiPower(0);
             if (frontlight_available) {
