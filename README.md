@@ -15,7 +15,7 @@ The live contest is available at <https://pb641-frame.blaznik-nejc.workers.dev>.
 
 ## Contest Behavior
 
-- Submissions and voting are public and require no account or access code. The canvas provides five grayscale ink shades tuned for E-Ink, plus an eraser.
+- Submissions and voting are public and require no account or access code. The canvas provides five grayscale ink shades tuned for E-Ink, an eraser, and optional vertical mirror symmetry.
 - Each browser can vote once for each drawing. This is a lightweight preference, not strong identity verification.
 - Active entries compete until the next 09:00 or 18:00 cutoff.
 - The entry with the most votes wins; ties go to the earliest submission.

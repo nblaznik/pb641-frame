@@ -26,7 +26,8 @@
     .view { display:none; }
     .view.active { display:block; }
     .draw-layout { width:min(1180px,100%); margin:auto; padding:24px 20px 50px; display:grid; grid-template-columns:minmax(0,758px) 290px; gap:30px; align-items:start; }
-    .canvas-shell { background:#fff; border:1px solid var(--ink); box-shadow:10px 10px 0 var(--ink); touch-action:none; }
+    .canvas-shell { position:relative; background:#fff; border:1px solid var(--ink); box-shadow:10px 10px 0 var(--ink); touch-action:none; }
+    .canvas-shell.symmetry-on::after { content:""; position:absolute; top:0; bottom:0; left:50%; border-left:1px dashed rgba(217,87,50,.55); pointer-events:none; }
     canvas { display:block; width:100%; height:auto; cursor:crosshair; }
     aside { position:sticky; top:20px; border-top:5px solid var(--ink); padding-top:5px; }
     input[type="range"] { width:100%; accent-color:var(--accent); }
@@ -92,6 +93,7 @@
         <div class="tools">
           <button id="pen" class="active" type="button">Pen</button><button id="eraser" type="button">Eraser</button>
           <button id="clear" type="button">Clear</button><button id="undo" type="button">Undo</button>
+          <button id="symmetry" type="button">Symmetry: off</button>
         </div>
         <button id="submit" class="primary submit" type="button">Enter this drawing</button>
         <p id="draw-status" class="status" role="status"></p>
@@ -127,6 +129,8 @@
     let drawing = false;
     let erasing = false;
     let drawingColor = '#111';
+    let symmetry = false;
+    let lastPoint = null;
     let imageUrls = [];
 
     context.fillStyle = '#fff';
@@ -142,17 +146,22 @@
       history.push(context.getImageData(0,0,canvas.width,canvas.height));
       if (history.length>10) history.shift();
     }
+    function drawSegment(from,to) {
+      context.beginPath();context.moveTo(from.x,from.y);context.lineTo(to.x,to.y);context.stroke();
+    }
     canvas.addEventListener('pointerdown',(event)=>{
       remember(); drawing=true; canvas.setPointerCapture(event.pointerId);
-      const start=point(event); context.beginPath(); context.moveTo(start.x,start.y);
+      lastPoint=point(event);
     });
     canvas.addEventListener('pointermove',(event)=>{
       if(!drawing)return; const next=point(event);
       context.strokeStyle=erasing?'#fff':drawingColor; context.lineWidth=Number(width.value);
-      context.lineTo(next.x,next.y); context.stroke();
+      drawSegment(lastPoint,next);
+      if(symmetry)drawSegment({x:canvas.width-lastPoint.x,y:lastPoint.y},{x:canvas.width-next.x,y:next.y});
+      lastPoint=next;
     });
-    canvas.addEventListener('pointerup',()=>{drawing=false;});
-    canvas.addEventListener('pointercancel',()=>{drawing=false;});
+    canvas.addEventListener('pointerup',()=>{drawing=false;lastPoint=null;});
+    canvas.addEventListener('pointercancel',()=>{drawing=false;lastPoint=null;});
 
     function setTool(useEraser) {
       erasing=useEraser; $('#pen').classList.toggle('active',!useEraser); $('#eraser').classList.toggle('active',useEraser);
@@ -166,6 +175,12 @@
     }));
     $('#clear').addEventListener('click',()=>{remember();context.fillStyle='#fff';context.fillRect(0,0,canvas.width,canvas.height);});
     $('#undo').addEventListener('click',()=>{const previous=history.pop();if(previous)context.putImageData(previous,0,0);});
+    $('#symmetry').addEventListener('click',()=>{
+      symmetry=!symmetry;
+      $('#symmetry').classList.toggle('active',symmetry);
+      $('#symmetry').textContent=`Symmetry: ${symmetry?'on':'off'}`;
+      document.querySelector('.canvas-shell').classList.toggle('symmetry-on',symmetry);
+    });
 
     function switchView(view) {
       for (const name of ['draw','vote','fame']) {
