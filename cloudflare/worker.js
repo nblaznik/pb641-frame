@@ -105,7 +105,13 @@ async function publishRound(env, slot) {
     env.DB.prepare('INSERT INTO publications (slot, submission_id, published_at) VALUES (?, ?, ?)')
       .bind(slot, winner.id, publishedAt),
   ]);
-  return { published: true, winner: winner.id, votes: winner.votes };
+  return {
+    published: true,
+    winner: winner.id,
+    artist: winner.artist,
+    location: winner.location,
+    votes: winner.votes,
+  };
 }
 
 async function handleFrameApi(request, env, url) {

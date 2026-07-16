@@ -41,6 +41,10 @@ npx wrangler deploy --config cloudflare/wrangler.jsonc
 
 Update the KV and D1 IDs in `cloudflare/wrangler.jsonc` after creating those resources. `ADMIN_TOKEN` protects only the undocumented manual publication endpoint; public contest operations do not use a token.
 
+### Manual Publication
+
+Open <https://pb641-frame.blaznik-nejc.workers.dev/admin.html> to preview the current vote leader. Enter the Cloudflare `ADMIN_TOKEN` and confirm to publish that drawing immediately. Manual publication closes the current round, starts a new one, updates the PocketBook image, and adds the winner to the Hall of Fame.
+
 ## Build And Install The Device App
 
 Build the SDK image once if needed:
