@@ -1,0 +1,16 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "pb641-frame",
+  "main": "worker.js",
+  "compatibility_date": "2026-07-16",
+  "assets": {
+    "directory": "../server/public",
+    "binding": "ASSETS"
+  },
+  "kv_namespaces": [
+    {
+      "binding": "FRAME_DATA",
+      "id": "7a1edefcd76c4b8d91126011fa8b0660"
+    }
+  ]
+}

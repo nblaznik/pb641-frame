@@ -3,3 +3,6 @@ build/
 server/data/
 node_modules/
 *.tmp
+device/pb641-frame.cfg
+.dev.vars
+.wrangler/

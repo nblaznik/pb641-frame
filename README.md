@@ -2,10 +2,13 @@
 
 PocketBook Frame turns a PocketBook PB641 into a dedicated E-Ink drawing display. A private web page provides a phone-friendly canvas; the device checks the server for a changed drawing and performs a full refresh only when the image revision changes.
 
+The hosted drawing page is available at <https://pb641-frame.blaznik-nejc.workers.dev>. Uploads require the private access token configured separately on the server and device.
+
 ## Components
 
 - `src/main.cpp`: PocketBook InkView application.
 - `server/`: dependency-free Node.js drawing server and web canvas.
+- `cloudflare/`: Cloudflare Worker and private KV storage deployment.
 - `device/pb641-frame.cfg.example`: device configuration template.
 - `build.sh`: ARM cross-build script for the PocketBook SDK container.
 
@@ -32,6 +35,19 @@ docker run -d --name pb641-frame-server \
 ```
 
 Place the server behind an HTTPS reverse proxy before exposing it outside a trusted LAN. The PocketBook sends its token as a query parameter because the built-in InkView downloader cannot set an authorization header. Configure the proxy not to retain query strings in access logs.
+
+### Cloudflare Deployment
+
+The production deployment serves the web canvas and API from one Cloudflare Worker. Authenticate Wrangler, create a KV namespace, place its ID in `cloudflare/wrangler.jsonc`, deploy, and set the shared secret:
+
+```sh
+npx wrangler login
+npx wrangler kv namespace create FRAME_DATA
+npx wrangler deploy --config cloudflare/wrangler.jsonc
+npx wrangler secret put FRAME_TOKEN --config cloudflare/wrangler.jsonc
+```
+
+The secret itself belongs only in Cloudflare, the ignored `device/pb641-frame.cfg`, and the sender's password field. It must never be committed.
 
 ## Build And Install The Device App
 
