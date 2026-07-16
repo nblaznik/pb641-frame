@@ -10,11 +10,15 @@
     body { margin:0; min-height:100vh; background:var(--paper); color:var(--ink); font-family:Georgia,"Times New Roman",serif; }
     button,input { font:inherit; }
     .masthead { width:min(1180px,100%); margin:auto; padding:28px 20px 22px; border-bottom:1px solid var(--ink); }
+    .masthead-inner { display:flex; align-items:end; justify-content:space-between; gap:30px; }
+    .countdown { min-width:250px; padding:14px 0 3px; border-top:5px solid var(--accent); text-align:right; }
+    .countdown strong { display:block; font:700 clamp(1.8rem,4vw,3rem)/1 Arial,sans-serif; letter-spacing:.04em; font-variant-numeric:tabular-nums; }
+    .countdown span { display:block; margin-top:7px; font:.75rem/1.3 Arial,sans-serif; text-transform:uppercase; letter-spacing:.08em; }
     h1 { margin:0; font-size:clamp(2.4rem,7vw,5.6rem); line-height:.82; letter-spacing:-.06em; }
     .eyebrow { margin:0 0 10px; font:700 .7rem/1.2 Arial,sans-serif; letter-spacing:.18em; text-transform:uppercase; color:var(--accent); }
     label { display:block; margin:15px 0 6px; font:700 .7rem/1.2 Arial,sans-serif; letter-spacing:.09em; text-transform:uppercase; }
     input[type="text"],input[type="password"] { width:100%; padding:11px; border:1px solid var(--ink); border-radius:0; background:var(--white); font-family:Arial,sans-serif; }
-    .tabs { display:flex; gap:8px; width:min(1180px,100%); margin:18px auto 0; padding:0 20px; }
+    .tabs { display:flex; flex-wrap:wrap; gap:8px; width:min(1180px,100%); margin:18px auto 0; padding:0 20px; }
     button { border:1px solid var(--ink); padding:11px 15px; background:transparent; color:var(--ink); font-family:Arial,sans-serif; font-weight:700; cursor:pointer; }
     button.active { background:var(--ink); color:var(--paper); }
     button.primary { border-color:var(--accent); background:var(--accent); color:#fff; }
@@ -35,6 +39,7 @@
     h2 { margin:0; font-size:clamp(2rem,5vw,4rem); letter-spacing:-.04em; }
     .gallery { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:22px; }
     .entry { background:#fff; border:1px solid var(--ink); }
+    .entry.winner { box-shadow:7px 7px 0 var(--accent); }
     .entry img { display:block; width:100%; aspect-ratio:758/1024; object-fit:contain; background:#fff; border-bottom:1px solid var(--ink); }
     .entry-info { padding:14px; }
     .entry h3 { margin:0; font-size:1.25rem; }
@@ -43,6 +48,8 @@
     .votes { font:700 .8rem Arial,sans-serif; text-transform:uppercase; letter-spacing:.08em; }
     .empty { padding:50px 0; border-top:1px solid var(--ink); font-size:1.2rem; }
     @media(max-width:780px) {
+      .masthead-inner { align-items:start; flex-direction:column; }
+      .countdown { width:100%; text-align:left; }
       .draw-layout { grid-template-columns:1fr; }
       aside { position:static; }
       .canvas-shell { box-shadow:6px 6px 0 var(--ink); }
@@ -52,11 +59,15 @@
   </style>
 </head>
 <body>
-  <header class="masthead"><p class="eyebrow">An open twice-daily drawing contest for E-Ink</p><h1>Draw for<br>the frame.</h1></header>
+  <header class="masthead"><div class="masthead-inner">
+    <div><p class="eyebrow">An open twice-daily drawing contest for E-Ink</p><h1>Draw for<br>the frame.</h1></div>
+    <div class="countdown"><p class="eyebrow">Next round closes in</p><strong id="countdown">--:--:--</strong><span id="deadline-label">09:00 or 18:00 Ljubljana</span></div>
+  </div></header>
 
   <nav class="tabs" aria-label="Choose an activity">
     <button id="draw-tab" class="active" type="button">Submit a drawing</button>
     <button id="vote-tab" type="button">Vote on drawings</button>
+    <button id="fame-tab" type="button">Hall of Fame</button>
   </nav>
 
   <section id="draw-view" class="view active">
@@ -82,6 +93,14 @@
       <div class="gallery-head"><div><p class="eyebrow">Current round</p><h2>Choose a favorite.</h2></div><button id="refresh" type="button">Refresh</button></div>
       <p id="vote-status" class="status" role="status"></p>
       <div id="gallery" class="gallery"></div>
+    </div>
+  </section>
+
+  <section id="fame-view" class="view">
+    <div class="gallery-wrap">
+      <div class="gallery-head"><div><p class="eyebrow">Past champions</p><h2>Hall of Fame.</h2></div><button id="refresh-fame" type="button">Refresh</button></div>
+      <p id="fame-status" class="status" role="status"></p>
+      <div id="fame-gallery" class="gallery"></div>
     </div>
   </section>
 
@@ -130,14 +149,19 @@
     $('#clear').addEventListener('click',()=>{remember();context.fillStyle='#fff';context.fillRect(0,0,canvas.width,canvas.height);});
     $('#undo').addEventListener('click',()=>{const previous=history.pop();if(previous)context.putImageData(previous,0,0);});
 
-    function switchView(vote) {
-      $('#draw-view').classList.toggle('active',!vote); $('#vote-view').classList.toggle('active',vote);
-      $('#draw-tab').classList.toggle('active',!vote); $('#vote-tab').classList.toggle('active',vote);
-      if(vote)loadGallery();
+    function switchView(view) {
+      for (const name of ['draw','vote','fame']) {
+        $(`#${name}-view`).classList.toggle('active',name===view);
+        $(`#${name}-tab`).classList.toggle('active',name===view);
+      }
+      if(view==='vote')loadGallery();
+      if(view==='fame')loadHallOfFame();
     }
-    $('#draw-tab').addEventListener('click',()=>switchView(false));
-    $('#vote-tab').addEventListener('click',()=>switchView(true));
+    $('#draw-tab').addEventListener('click',()=>switchView('draw'));
+    $('#vote-tab').addEventListener('click',()=>switchView('vote'));
+    $('#fame-tab').addEventListener('click',()=>switchView('fame'));
     $('#refresh').addEventListener('click',loadGallery);
+    $('#refresh-fame').addEventListener('click',loadHallOfFame);
 
     function exportedDrawing() {
       const output=document.createElement('canvas'); output.width=758; output.height=1024;
@@ -175,7 +199,7 @@
         if(!response.ok)throw new Error(`Server error (${response.status}).`);
         const {submissions}=await response.json(); gallery.replaceChildren();
         if(!submissions.length){gallery.innerHTML='<p class="empty">No drawings yet. Be the first to enter this round.</p>';status.textContent='';return;}
-        await Promise.all(submissions.map(async(entry)=>{
+        const cards=await Promise.all(submissions.map(async(entry)=>{
           const imageResponse=await fetch(`/api/submissions/${entry.id}/image`);
           const imageUrl=URL.createObjectURL(await imageResponse.blob()); imageUrls.push(imageUrl);
           const card=document.createElement('article'); card.className='entry';
@@ -191,11 +215,62 @@
             try{const vote=await fetch(`/api/submissions/${entry.id}/vote`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({voterId:voterId()})});const result=await vote.json();if(!vote.ok)throw new Error(result.error);count.textContent=`${result.votes} vote${result.votes===1?'':'s'}`;button.textContent=result.accepted?'Voted':'Already voted';}
             catch(error){status.textContent=error.message;button.disabled=false;}
           });
-          row.append(count,button); info.append(name,place,row); card.append(image,info); gallery.append(card);
+          row.append(count,button); info.append(name,place,row); card.append(image,info); return card;
         }));
+        gallery.append(...cards);
         status.textContent='Vote once for as many drawings as you like.';
       } catch(error){status.textContent=error.message;gallery.replaceChildren();}
     }
+
+    async function loadHallOfFame() {
+      const gallery=$('#fame-gallery'); const status=$('#fame-status');
+      status.textContent='Loading winners…'; imageUrls.forEach(URL.revokeObjectURL); imageUrls=[];
+      try {
+        const response=await fetch('/api/hall-of-fame');
+        if(!response.ok)throw new Error(`Server error (${response.status}).`);
+        const {winners}=await response.json(); gallery.replaceChildren();
+        if(!winners.length){gallery.innerHTML='<p class="empty">The first champion will appear here after a round closes.</p>';status.textContent='';return;}
+        const cards=await Promise.all(winners.map(async(winner)=>{
+          const imageResponse=await fetch(`/api/image?revision=${winner.revision}`);
+          if(!imageResponse.ok)throw new Error('A winning image is temporarily unavailable.');
+          const imageUrl=URL.createObjectURL(await imageResponse.blob()); imageUrls.push(imageUrl);
+          const card=document.createElement('article'); card.className='entry winner';
+          const image=document.createElement('img'); image.src=imageUrl; image.alt=`Winning drawing by ${winner.artist}`;
+          const info=document.createElement('div'); info.className='entry-info';
+          const name=document.createElement('h3'); name.textContent=winner.artist;
+          const place=document.createElement('p'); place.className='location'; place.textContent=winner.location||'Location not shared';
+          const result=document.createElement('div'); result.className='vote-row';
+          const votes=document.createElement('span'); votes.className='votes'; votes.textContent=`${winner.votes} vote${winner.votes===1?'':'s'}`;
+          const date=document.createElement('span'); date.textContent=new Intl.DateTimeFormat(undefined,{dateStyle:'medium',timeStyle:'short',timeZone:'Europe/Ljubljana'}).format(new Date(winner.publishedAt));
+          result.append(votes,date); info.append(name,place,result); card.append(image,info); return card;
+        }));
+        gallery.append(...cards);
+        status.textContent=`${winners.length} champion${winners.length===1?'':'s'} and counting.`;
+      } catch(error){status.textContent=error.message;gallery.replaceChildren();}
+    }
+
+    let deadline=0;
+    let serverOffset=0;
+    async function syncDeadline() {
+      try {
+        const status=await (await fetch('/api/status')).json();
+        serverOffset=Date.parse(status.now)-Date.now(); deadline=Date.parse(status.nextDeadline);
+        $('#deadline-label').textContent=new Intl.DateTimeFormat(undefined,{weekday:'short',hour:'2-digit',minute:'2-digit',timeZone:status.timeZone,timeZoneName:'short'}).format(new Date(deadline));
+        updateCountdown();
+      } catch { $('#countdown').textContent='Unavailable'; }
+    }
+    function updateCountdown() {
+      const remaining=Math.max(0,deadline-(Date.now()+serverOffset));
+      const totalSeconds=Math.floor(remaining/1000);
+      const hours=Math.floor(totalSeconds/3600);
+      const minutes=Math.floor((totalSeconds%3600)/60);
+      const seconds=totalSeconds%60;
+      $('#countdown').textContent=[hours,minutes,seconds].map((part)=>String(part).padStart(2,'0')).join(':');
+      if(remaining===0&&deadline)syncDeadline();
+    }
+    syncDeadline();
+    setInterval(updateCountdown,1000);
+    setInterval(syncDeadline,5*60*1000);
   </script>
 </body>
 </html>

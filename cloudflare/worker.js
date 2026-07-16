@@ -55,6 +55,16 @@ function contestSlot(date) {
   return `${values.year}-${values.month}-${values.day}-${values.hour}`;
 }
 
+function nextDeadline(date) {
+  const hour = 60 * 60 * 1000;
+  const firstFutureHour = Math.floor(date.getTime() / hour) * hour + hour;
+  for (let offset = 0; offset < 48; offset += 1) {
+    const candidate = new Date(firstFutureHour + offset * hour);
+    if (contestSlot(candidate)) return candidate;
+  }
+  throw new Error('Could not determine the next publication deadline');
+}
+
 async function publishRound(env, slot) {
   const previous = await env.DB.prepare('SELECT slot FROM publications WHERE slot = ?').bind(slot).first();
   if (previous) return { published: false, reason: 'slot-already-published' };
@@ -99,6 +109,15 @@ async function publishRound(env, slot) {
 }
 
 async function handleFrameApi(request, env, url) {
+  if (request.method === 'GET' && url.pathname === '/api/status') {
+    const now = new Date();
+    return json({
+      now: now.toISOString(),
+      nextDeadline: nextDeadline(now).toISOString(),
+      timeZone: TIME_ZONE,
+    });
+  }
+
   if (request.method === 'GET' && url.pathname === '/api/revision') {
     const revision = await env.FRAME_DATA.get('revision');
     return revision
@@ -138,6 +157,21 @@ async function handleFrameApi(request, env, url) {
       LIMIT 100
     `).all();
     return json({ submissions: result.results });
+  }
+
+  if (request.method === 'GET' && url.pathname === '/api/hall-of-fame') {
+    const result = await env.DB.prepare(`
+      SELECT s.id, s.artist, s.location, s.revision,
+             p.published_at AS publishedAt, COUNT(v.submission_id) AS votes
+      FROM publications p
+      JOIN submissions s ON s.id = p.submission_id
+      LEFT JOIN votes v ON v.submission_id = s.id
+      WHERE s.winner = 1
+      GROUP BY p.slot, s.id
+      ORDER BY p.published_at DESC
+      LIMIT 100
+    `).all();
+    return json({ winners: result.results });
   }
 
   if (request.method === 'POST' && url.pathname === '/api/submissions') {

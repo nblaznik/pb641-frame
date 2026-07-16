@@ -1,6 +1,6 @@
 # PocketBook Frame
 
-PocketBook Frame turns a PocketBook PB641 into a public, twice-daily E-Ink drawing contest. Anyone can draw, submit, browse the current entries, and vote. At 09:00 and 18:00 Europe/Ljubljana time, the highest-voted drawing is published to the PocketBook with the artist's name and optional location in its footer.
+PocketBook Frame turns a PocketBook PB641 into a public, twice-daily E-Ink drawing contest. Anyone can draw, submit, browse the current entries, and vote. A live countdown shows the next deadline. At 09:00 and 18:00 Europe/Ljubljana time, the highest-voted drawing is published to the PocketBook with the artist's name and optional location in its footer.
 
 The live contest is available at <https://pb641-frame.blaznik-nejc.workers.dev>.
 
@@ -20,6 +20,7 @@ The live contest is available at <https://pb641-frame.blaznik-nejc.workers.dev>.
 - Active entries compete until the next 09:00 or 18:00 cutoff.
 - The entry with the most votes wins; ties go to the earliest submission.
 - A cutoff archives all entries in that round and starts a new round.
+- Published winners remain available in the Hall of Fame with their attribution, vote total, and publication time.
 - If a round has no submissions, the currently displayed PocketBook image remains unchanged.
 - Submission JPEGs are stored in Cloudflare KV and contest records and votes are stored in D1.
 
