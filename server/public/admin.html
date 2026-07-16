@@ -6,79 +6,147 @@
   <meta name="robots" content="noindex, nofollow">
   <title>Frame Admin</title>
   <style>
-    :root { --ink:#191815; --paper:#f3efe4; --accent:#d95732; }
+    :root { --ink:#191815; --paper:#f3efe4; --accent:#d95732; --danger:#8e281d; }
     * { box-sizing:border-box; }
     body { margin:0; min-height:100vh; padding:30px 20px; background:var(--paper); color:var(--ink); font-family:Georgia,"Times New Roman",serif; }
-    main { width:min(760px,100%); margin:auto; }
+    main { width:min(820px,100%); margin:auto; }
     .eyebrow { margin:0 0 10px; color:var(--accent); font:700 .72rem Arial,sans-serif; letter-spacing:.18em; text-transform:uppercase; }
     h1 { margin:0 0 30px; font-size:clamp(2.7rem,9vw,6rem); line-height:.85; letter-spacing:-.06em; }
-    .panel { display:grid; grid-template-columns:minmax(0,1fr) 250px; border-top:5px solid var(--ink); padding-top:20px; gap:24px; }
+    .panel { display:grid; grid-template-columns:minmax(0,1fr) 290px; border-top:5px solid var(--ink); padding-top:20px; gap:28px; }
     img { display:block; width:100%; aspect-ratio:758/1024; object-fit:contain; background:#fff; border:1px solid var(--ink); }
-    label { display:block; margin-bottom:7px; font:700 .72rem Arial,sans-serif; letter-spacing:.09em; text-transform:uppercase; }
-    input { width:100%; padding:12px; border:1px solid var(--ink); border-radius:0; background:#fff; font:1rem Arial,sans-serif; }
-    button { width:100%; margin-top:14px; padding:14px; border:1px solid var(--accent); background:var(--accent); color:#fff; font:700 1rem Arial,sans-serif; cursor:pointer; }
-    button:disabled { opacity:.5; cursor:wait; }
-    h2 { margin:0 0 5px; font-size:2rem; }
-    #location { margin:0 0 18px; font-style:italic; }
-    #votes { font:700 .8rem Arial,sans-serif; letter-spacing:.1em; text-transform:uppercase; }
-    #status { min-height:3em; font:.9rem/1.45 Arial,sans-serif; }
+    label { display:block; margin:14px 0 7px; font:700 .72rem Arial,sans-serif; letter-spacing:.09em; text-transform:uppercase; }
+    input,select { width:100%; padding:12px; border:1px solid var(--ink); border-radius:0; background:#fff; font:1rem Arial,sans-serif; }
+    button { width:100%; margin-top:10px; padding:13px; border:1px solid var(--ink); background:transparent; color:var(--ink); font:700 .92rem Arial,sans-serif; cursor:pointer; }
+    button.primary { border-color:var(--accent); background:var(--accent); color:#fff; }
+    button.danger { border-color:var(--danger); color:var(--danger); }
+    button:disabled { opacity:.42; cursor:not-allowed; }
+    h2 { margin:18px 0 5px; font-size:2rem; }
+    #location { margin:0 0 12px; font-style:italic; }
+    #details { font:700 .76rem/1.5 Arial,sans-serif; letter-spacing:.08em; text-transform:uppercase; }
+    #status { min-height:3.5em; font:.9rem/1.45 Arial,sans-serif; }
     a { color:inherit; }
-    @media(max-width:650px) { .panel { grid-template-columns:1fr; } }
+    @media(max-width:680px) { .panel { grid-template-columns:1fr; } }
   </style>
 </head>
 <body>
   <main>
     <p class="eyebrow">PocketBook Frame control room</p>
-    <h1>Publish the<br>leader now.</h1>
+    <h1>Choose what<br>goes live.</h1>
     <section class="panel">
-      <img id="preview" alt="Current leading drawing">
+      <img id="preview" alt="Selected drawing preview">
       <div>
-        <p class="eyebrow">Current leader</p>
-        <h2 id="artist">Loading…</h2>
-        <p id="location"></p>
-        <p id="votes"></p>
         <label for="secret">Admin secret</label>
         <input id="secret" type="password" autocomplete="current-password">
-        <button id="publish" type="button" disabled>Publish and close round</button>
+        <button id="load" type="button">Unlock image library</button>
+
+        <label for="entry">Stored image</label>
+        <select id="entry" disabled></select>
+        <h2 id="artist">Library locked</h2>
+        <p id="location"></p>
+        <p id="details"></p>
+
+        <button id="display" class="primary" type="button" disabled>Send directly to frame</button>
+        <button id="publish" type="button" disabled>Publish winner and close round</button>
+        <button id="delete" class="danger" type="button" disabled>Delete this image</button>
         <p id="status" role="status"></p>
         <a href="/">Return to the contest</a>
       </div>
     </section>
   </main>
   <script>
-    const preview=document.querySelector('#preview');
-    const publish=document.querySelector('#publish');
-    const secret=document.querySelector('#secret');
-    const status=document.querySelector('#status');
-    let leader=null;
+    const $=(selector)=>document.querySelector(selector);
+    const preview=$('#preview');
+    const secret=$('#secret');
+    const entrySelect=$('#entry');
+    const status=$('#status');
+    let images=[];
+    let selected=null;
+    let previewUrl=null;
 
-    async function loadLeader() {
-      try {
-        const {submissions}=await (await fetch('/api/submissions')).json();
-        leader=submissions[0]||null;
-        if(!leader){document.querySelector('#artist').textContent='No active entries';preview.removeAttribute('src');publish.disabled=true;return;}
-        document.querySelector('#artist').textContent=leader.artist;
-        document.querySelector('#location').textContent=leader.location||'Location not shared';
-        document.querySelector('#votes').textContent=`${leader.votes} vote${leader.votes===1?'':'s'}`;
-        preview.src=`/api/submissions/${leader.id}/image`;
-        publish.disabled=false;
-      } catch(error) { status.textContent=error.message; }
+    secret.value=sessionStorage.getItem('frameAdminSecret')||'';
+    function headers(extra={}) { return {Authorization:`Bearer ${secret.value}`,...extra}; }
+    function setBusy(busy) {
+      $('#load').disabled=busy;
+      $('#display').disabled=busy||!selected;
+      $('#publish').disabled=busy||!selected||!selected.active;
+      $('#delete').disabled=busy||!selected;
     }
 
-    publish.addEventListener('click',async()=>{
+    async function showSelection() {
+      selected=images.find((image)=>image.id===entrySelect.value)||null;
+      setBusy(false);
+      if(previewUrl){URL.revokeObjectURL(previewUrl);previewUrl=null;}
+      if(!selected){$('#artist').textContent='No stored images';$('#location').textContent='';$('#details').textContent='';preview.removeAttribute('src');return;}
+      $('#artist').textContent=selected.artist;
+      $('#location').textContent=selected.location||'Location not shared';
+      const flags=[selected.current?'currently displayed':null,selected.active?'active round':'archived',selected.winner?'Hall of Fame winner':null].filter(Boolean);
+      $('#details').textContent=`${selected.votes} vote${selected.votes===1?'':'s'} · ${flags.join(' · ')}`;
+      const response=await fetch(`/api/admin/images/${selected.id}/file`,{headers:headers()});
+      if(response.ok){previewUrl=URL.createObjectURL(await response.blob());preview.src=previewUrl;}
+      else{preview.removeAttribute('src');status.textContent='The image file has expired, but its database record can still be deleted.';}
+    }
+
+    async function loadLibrary(preferredId=null) {
       if(!secret.value){status.textContent='Enter the admin secret.';secret.focus();return;}
-      if(!confirm(`Publish ${leader.artist}'s drawing and close the current round?`))return;
-      publish.disabled=true;status.textContent='Publishing…';
+      setBusy(true);status.textContent='Loading image library…';
       try {
-        const response=await fetch('/api/admin/publish',{method:'POST',headers:{Authorization:`Bearer ${secret.value}`}});
+        const response=await fetch('/api/admin/images',{headers:headers()});
         if(response.status===401)throw new Error('Incorrect admin secret.');
-        const result=await response.json();
         if(!response.ok)throw new Error(`Server error (${response.status}).`);
-        status.textContent=result.published?`${result.artist}'s drawing is now live on the frame.`:'There are no entries to publish.';
-        if(result.published)await loadLeader();
-      } catch(error) { status.textContent=error.message;publish.disabled=!leader; }
+        sessionStorage.setItem('frameAdminSecret',secret.value);
+        images=(await response.json()).images;
+        entrySelect.replaceChildren(...images.map((image)=>{
+          const option=document.createElement('option');option.value=image.id;
+          const flags=[image.current?'LIVE':null,image.active?'ACTIVE':null,image.winner?'WINNER':null].filter(Boolean).join(', ');
+          option.textContent=`${image.artist} — ${image.votes} vote${image.votes===1?'':'s'}${flags?` [${flags}]`:''}`;return option;
+        }));
+        entrySelect.disabled=!images.length;
+        if(preferredId&&images.some((image)=>image.id===preferredId))entrySelect.value=preferredId;
+        status.textContent=`${images.length} image${images.length===1?'':'s'} in the library.`;
+        await showSelection();
+      } catch(error){status.textContent=error.message;images=[];selected=null;entrySelect.disabled=true;setBusy(false);}
+    }
+
+    $('#load').addEventListener('click',()=>loadLibrary());
+    entrySelect.addEventListener('change',showSelection);
+
+    $('#display').addEventListener('click',async()=>{
+      setBusy(true);status.textContent='Sending image to the frame…';
+      try {
+        const response=await fetch(`/api/admin/images/${selected.id}/display`,{method:'POST',headers:headers()});
+        const result=await response.json();
+        if(!result.displayed)throw new Error(result.reason==='image-missing'?'This image file is no longer available.':'Image not found.');
+        status.textContent=`${result.artist}'s image is now queued for the frame.`;
+        await loadLibrary(selected.id);
+      } catch(error){status.textContent=error.message;setBusy(false);}
     });
-    loadLeader();
+
+    $('#publish').addEventListener('click',async()=>{
+      if(!confirm(`Publish ${selected.artist}'s drawing as the winner and close the current round?`))return;
+      setBusy(true);status.textContent='Publishing winner…';
+      try {
+        const response=await fetch('/api/admin/publish',{method:'POST',headers:headers({'Content-Type':'application/json'}),body:JSON.stringify({submissionId:selected.id})});
+        const result=await response.json();
+        if(!result.published)throw new Error(result.reason==='image-missing'?'This image file is no longer available.':'The submission is no longer active.');
+        status.textContent=`${result.artist}'s drawing won and is now queued for the frame.`;
+        await loadLibrary(result.winner);
+      } catch(error){status.textContent=error.message;setBusy(false);}
+    });
+
+    $('#delete').addEventListener('click',async()=>{
+      const warning=selected.current?' This is currently displayed; the previous winner will be restored when possible.':'';
+      if(!confirm(`Permanently delete ${selected.artist}'s image, votes, and records?${warning}`))return;
+      setBusy(true);status.textContent='Deleting image…';
+      try {
+        const response=await fetch(`/api/admin/images/${selected.id}`,{method:'DELETE',headers:headers()});
+        const result=await response.json();
+        if(!result.deleted)throw new Error('Image not found.');
+        const fallback=result.fallback?` ${result.fallback}'s image was restored to the frame.`:'';
+        await loadLibrary();status.textContent=`Image deleted.${fallback}`;
+      } catch(error){status.textContent=error.message;setBusy(false);}
+    });
+
+    if(secret.value)loadLibrary();
   </script>
 </body>
 </html>

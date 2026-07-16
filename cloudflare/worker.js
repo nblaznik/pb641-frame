@@ -65,19 +65,27 @@ function nextDeadline(date) {
   throw new Error('Could not determine the next publication deadline');
 }
 
-async function publishRound(env, slot) {
+async function publishRound(env, slot, selectedSubmissionId = null) {
   const previous = await env.DB.prepare('SELECT slot FROM publications WHERE slot = ?').bind(slot).first();
   if (previous) return { published: false, reason: 'slot-already-published' };
 
-  const winner = await env.DB.prepare(`
-    SELECT s.id, s.artist, s.location, s.revision, COUNT(v.submission_id) AS votes
-    FROM submissions s
-    LEFT JOIN votes v ON v.submission_id = s.id
-    WHERE s.closed_at IS NULL
-    GROUP BY s.id
-    ORDER BY votes DESC, s.created_at ASC
-    LIMIT 1
-  `).first();
+  const winner = selectedSubmissionId
+    ? await env.DB.prepare(`
+        SELECT s.id, s.artist, s.location, s.revision, COUNT(v.submission_id) AS votes
+        FROM submissions s
+        LEFT JOIN votes v ON v.submission_id = s.id
+        WHERE s.closed_at IS NULL AND s.id = ?
+        GROUP BY s.id
+      `).bind(selectedSubmissionId).first()
+    : await env.DB.prepare(`
+        SELECT s.id, s.artist, s.location, s.revision, COUNT(v.submission_id) AS votes
+        FROM submissions s
+        LEFT JOIN votes v ON v.submission_id = s.id
+        WHERE s.closed_at IS NULL
+        GROUP BY s.id
+        ORDER BY votes DESC, s.created_at ASC
+        LIMIT 1
+      `).first();
   const publishedAt = new Date().toISOString();
 
   if (!winner) {
@@ -112,6 +120,137 @@ async function publishRound(env, slot) {
     location: winner.location,
     votes: winner.votes,
   };
+}
+
+async function storedSubmissionImage(env, submission) {
+  return await env.FRAME_DATA.get(`submission:${submission.id}`, 'arrayBuffer') ||
+    await env.FRAME_DATA.get(`published:${submission.revision}`, 'arrayBuffer');
+}
+
+async function displaySubmission(env, submissionId) {
+  const submission = await env.DB.prepare(
+    'SELECT id, artist, location, revision FROM submissions WHERE id = ?',
+  ).bind(submissionId).first();
+  if (!submission) return { displayed: false, reason: 'not-found' };
+
+  const image = await storedSubmissionImage(env, submission);
+  if (!image) return { displayed: false, reason: 'image-missing' };
+  const displayedAt = new Date().toISOString();
+  await env.FRAME_DATA.put(`published:${submission.revision}`, image);
+  await env.FRAME_DATA.put('revision', submission.revision);
+  await env.FRAME_DATA.put('attribution', JSON.stringify({
+    artist: submission.artist,
+    location: submission.location,
+    submissionId: submission.id,
+    publishedAt: displayedAt,
+  }));
+  return { displayed: true, artist: submission.artist, revision: submission.revision };
+}
+
+async function deleteSubmission(env, submissionId) {
+  const submission = await env.DB.prepare(
+    'SELECT id, artist, location, revision FROM submissions WHERE id = ?',
+  ).bind(submissionId).first();
+  if (!submission) return { deleted: false, reason: 'not-found' };
+
+  const attribution = await env.FRAME_DATA.get('attribution', 'json');
+  const isCurrent = attribution && attribution.submissionId === submission.id;
+  const fallback = isCurrent
+    ? await env.DB.prepare(`
+        SELECT s.id, s.artist, s.location, s.revision, p.published_at AS publishedAt
+        FROM publications p
+        JOIN submissions s ON s.id = p.submission_id
+        WHERE s.id != ?
+        ORDER BY p.published_at DESC
+        LIMIT 1
+      `).bind(submission.id).first()
+    : null;
+
+  await env.DB.batch([
+    env.DB.prepare('DELETE FROM publications WHERE submission_id = ?').bind(submission.id),
+    env.DB.prepare('DELETE FROM votes WHERE submission_id = ?').bind(submission.id),
+    env.DB.prepare('DELETE FROM submissions WHERE id = ?').bind(submission.id),
+  ]);
+  await env.FRAME_DATA.delete(`submission:${submission.id}`);
+
+  const sameRevision = await env.DB.prepare(
+    'SELECT COUNT(*) AS count FROM submissions WHERE revision = ?',
+  ).bind(submission.revision).first();
+  if (sameRevision.count === 0) {
+    await env.FRAME_DATA.delete(`published:${submission.revision}`);
+  }
+
+  if (isCurrent) {
+    const fallbackImage = fallback ? await storedSubmissionImage(env, fallback) : null;
+    if (fallback && fallbackImage) {
+      await env.FRAME_DATA.put(`published:${fallback.revision}`, fallbackImage);
+      await env.FRAME_DATA.put('revision', fallback.revision);
+      await env.FRAME_DATA.put('attribution', JSON.stringify({
+        artist: fallback.artist,
+        location: fallback.location,
+        submissionId: fallback.id,
+        publishedAt: fallback.publishedAt,
+      }));
+    } else {
+      await env.FRAME_DATA.delete('revision');
+      await env.FRAME_DATA.delete('attribution');
+    }
+  }
+  return { deleted: true, wasCurrent: Boolean(isCurrent), fallback: fallback?.artist || null };
+}
+
+async function handleAdminApi(request, env, url) {
+  if (!tokenMatches(suppliedToken(request, url), env.ADMIN_TOKEN)) {
+    return response('Unauthorized\n', 401);
+  }
+
+  if (request.method === 'GET' && url.pathname === '/api/admin/images') {
+    const attribution = await env.FRAME_DATA.get('attribution', 'json');
+    const result = await env.DB.prepare(`
+      SELECT s.id, s.artist, s.location, s.revision, s.created_at AS createdAt,
+             s.closed_at IS NULL AS active, s.winner,
+             MAX(p.published_at) AS publishedAt, COUNT(DISTINCT v.voter_id) AS votes
+      FROM submissions s
+      LEFT JOIN votes v ON v.submission_id = s.id
+      LEFT JOIN publications p ON p.submission_id = s.id
+      GROUP BY s.id
+      ORDER BY active DESC, s.created_at DESC
+      LIMIT 500
+    `).all();
+    return json({
+      images: result.results.map((image) => ({
+        ...image,
+        current: attribution?.submissionId === image.id,
+      })),
+    });
+  }
+
+  const imageMatch = url.pathname.match(/^\/api\/admin\/images\/([0-9a-f-]+)\/file$/);
+  if (request.method === 'GET' && imageMatch) {
+    const submission = await env.DB.prepare(
+      'SELECT id, revision FROM submissions WHERE id = ?',
+    ).bind(imageMatch[1]).first();
+    const image = submission ? await storedSubmissionImage(env, submission) : null;
+    return image
+      ? response(image, 200, { 'Content-Type': 'image/jpeg' })
+      : response('Image unavailable\n', 404);
+  }
+
+  const displayMatch = url.pathname.match(/^\/api\/admin\/images\/([0-9a-f-]+)\/display$/);
+  if (request.method === 'POST' && displayMatch) {
+    return json(await displaySubmission(env, displayMatch[1]));
+  }
+
+  const deleteMatch = url.pathname.match(/^\/api\/admin\/images\/([0-9a-f-]+)$/);
+  if (request.method === 'DELETE' && deleteMatch) {
+    return json(await deleteSubmission(env, deleteMatch[1]));
+  }
+
+  if (request.method === 'POST' && url.pathname === '/api/admin/publish') {
+    const body = await request.json().catch(() => ({}));
+    return json(await publishRound(env, `manual-${Date.now()}`, body.submissionId || null));
+  }
+  return response('Not found\n', 404);
 }
 
 async function handleFrameApi(request, env, url) {
@@ -236,12 +375,7 @@ async function handleFrameApi(request, env, url) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    if (request.method === 'POST' && url.pathname === '/api/admin/publish') {
-      if (!tokenMatches(suppliedToken(request, url), env.ADMIN_TOKEN)) {
-        return response('Unauthorized\n', 401);
-      }
-      return json(await publishRound(env, `manual-${Date.now()}`));
-    }
+    if (url.pathname.startsWith('/api/admin/')) return handleAdminApi(request, env, url);
     if (url.pathname.startsWith('/api/')) return handleFrameApi(request, env, url);
     return env.ASSETS.fetch(request);
   },

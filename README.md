@@ -43,7 +43,9 @@ Update the KV and D1 IDs in `cloudflare/wrangler.jsonc` after creating those res
 
 ### Manual Publication
 
-Open <https://pb641-frame.blaznik-nejc.workers.dev/admin.html> to preview the current vote leader. Enter the Cloudflare `ADMIN_TOKEN` and confirm to publish that drawing immediately. Manual publication closes the current round, starts a new one, updates the PocketBook image, and adds the winner to the Hall of Fame.
+Open <https://pb641-frame.blaznik-nejc.workers.dev/admin.html> and enter the Cloudflare `ADMIN_TOKEN` to unlock the image library. From there an administrator can preview every record, send any available image directly to the frame without affecting voting, select an active submission as the winner and close its round, or permanently delete an image and its related votes and records. Deleting the currently displayed image restores the previous Hall of Fame winner when available. Scheduled publication still selects the vote leader automatically.
+
+Submission images are stored in Cloudflare KV under `submission:<uuid>` for 14 days. Published and directly displayed images are retained under `published:<sha256>`. Names, votes, round state, and publication history live in D1. Use the admin page rather than deleting KV keys manually so both stores remain consistent.
 
 ## Build And Install The Device App
 
@@ -71,7 +73,7 @@ server_url=https://pb641-frame.blaznik-nejc.workers.dev
 poll_seconds=300
 ```
 
-Connect the PocketBook to Wi-Fi through its normal settings first so it has a saved default network. Launch `PB641Frame.app`; it caches the latest winner at `/mnt/ext1/My pictures/PB641Frame/latest.jpg`. Press Back to exit.
+Connect the PocketBook to Wi-Fi through its normal settings first so it has a saved default network. Launch `PB641Frame.app`; it caches the latest winner at `/mnt/ext1/My pictures/PB641Frame/latest.jpg`. Tap the screen to toggle the frontlight between off and maximum brightness. Press Back to exit; the app restores the frontlight setting that was active when it launched.
 
 ## Polling And Power
 

@@ -24,6 +24,9 @@ static ifont* body_font = NULL;
 static bool image_is_visible = false;
 static bool poll_in_progress = false;
 static int poll_seconds = DEFAULT_POLL_SECONDS;
+static int initial_frontlight_state = 0;
+static int initial_frontlight_enabled = 0;
+static bool frontlight_available = false;
 
 struct Config {
     std::string server_url;
@@ -155,6 +158,21 @@ static bool draw_image(const char* path)
 
 static void schedule_poll(int delay_seconds);
 
+static void toggle_frontlight()
+{
+    if (!frontlight_available) {
+        return;
+    }
+    const bool is_lit = GetFrontlightEnabled() && GetFrontlightState() > 0;
+    if (is_lit) {
+        SetFrontlightState(0);
+        SetFrontlightEnabled(0);
+    } else {
+        SetFrontlightEnabled(1);
+        SetFrontlightState(100);
+    }
+}
+
 static void finish_poll()
 {
     NetDisconnect();
@@ -268,6 +286,11 @@ static int event_handler(int type, int par1, int par2)
         case EVT_INIT:
             title_font = OpenFont("LiberationSans", 28, 1);
             body_font = OpenFont("LiberationSans", 20, 0);
+            frontlight_available = GetFrontlightVersion() > 0;
+            if (frontlight_available) {
+                initial_frontlight_state = GetFrontlightState();
+                initial_frontlight_enabled = GetFrontlightEnabled();
+            }
             mkdir(IMAGE_DIR, 0755);
             if (!draw_image(IMAGE_PATH)) {
                 draw_message("PocketBook Frame", "Waiting for the first drawing...");
@@ -288,10 +311,18 @@ static int event_handler(int type, int par1, int par2)
             }
             return 0;
 
+        case EVT_POINTERUP:
+            toggle_frontlight();
+            return 1;
+
         case EVT_EXIT:
             ClearTimerByName(POLL_TIMER);
             NetDisconnect();
             WiFiPower(0);
+            if (frontlight_available) {
+                SetFrontlightState(initial_frontlight_state);
+                SetFrontlightEnabled(initial_frontlight_enabled);
+            }
             if (title_font != NULL) {
                 CloseFont(title_font);
                 title_font = NULL;
