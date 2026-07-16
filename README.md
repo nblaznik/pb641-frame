@@ -70,10 +70,10 @@ Example configuration:
 
 ```ini
 server_url=https://pb641-frame.blaznik-nejc.workers.dev
-poll_seconds=300
+poll_seconds=60
 ```
 
-Connect the PocketBook to Wi-Fi through its normal settings first so it has a saved default network. Launch `PB641Frame.app`; it caches the latest winner at `/mnt/ext1/My pictures/PB641Frame/latest.jpg`. While running, the app blocks standby, the screensaver, and timed poweroff so the frame remains visible continuously. Tap the screen to toggle the frontlight between off and maximum brightness. Press Back to exit; the app restores the sleep policy and frontlight setting that were active when it launched.
+Connect the PocketBook to Wi-Fi through its normal settings first so it has a saved default network. Launch `PB641Frame.app`; it caches the latest winner at `/mnt/ext1/My pictures/PB641Frame/latest.jpg`. While running, the app blocks standby, the screensaver, timed poweroff, and the system panel so the artwork remains unobstructed. Drag vertically along the left edge to adjust the frontlight continuously from 0% at the bottom to 100% at the top; tap elsewhere to toggle between off and maximum. Press Back to exit; the app restores the system panel, sleep policy, and frontlight setting that were active when it launched.
 
 ## Polling And Power
 

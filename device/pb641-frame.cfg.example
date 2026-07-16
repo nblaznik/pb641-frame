@@ -2,4 +2,4 @@
 server_url=https://frame.example.com
 
 # Values below 60 seconds are clamped to 60 to protect the battery.
-poll_seconds=300
+poll_seconds=60

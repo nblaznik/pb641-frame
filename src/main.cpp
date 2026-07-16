@@ -29,6 +29,9 @@ static int initial_frontlight_state = 0;
 static int initial_frontlight_enabled = 0;
 static bool frontlight_available = false;
 static int initial_sleep_mode = 1;
+static int initial_panel_type = PANEL_ENABLED;
+static bool frontlight_drag_active = false;
+static const int FRONTLIGHT_GESTURE_WIDTH = 96;
 
 struct Config {
     std::string server_url;
@@ -183,6 +186,23 @@ static void toggle_frontlight()
     }
 }
 
+static void set_frontlight_from_y(int y)
+{
+    if (!frontlight_available) {
+        return;
+    }
+    const int height = ScreenHeight();
+    const int clamped_y = y < 0 ? 0 : (y >= height ? height - 1 : y);
+    const int brightness = 100 - (clamped_y * 100 / (height - 1));
+    if (brightness == 0) {
+        SetFrontlightState(0);
+        SetFrontlightEnabled(0);
+    } else {
+        SetFrontlightEnabled(1);
+        SetFrontlightState(brightness);
+    }
+}
+
 static void finish_poll()
 {
     NetDisconnect();
@@ -302,6 +322,8 @@ static int event_handler(int type, int par1, int par2)
                 initial_frontlight_enabled = GetFrontlightEnabled();
             }
             initial_sleep_mode = GetSleepmode();
+            initial_panel_type = GetPanelType();
+            SetPanelType(PANEL_DISABLED);
             keep_awake();
             mkdir(IMAGE_DIR, 0755);
             if (!draw_image(IMAGE_PATH)) {
@@ -311,6 +333,7 @@ static int event_handler(int type, int par1, int par2)
             return 1;
 
         case EVT_SHOW:
+            SetPanelType(PANEL_DISABLED);
             if (!image_is_visible) {
                 draw_image(IMAGE_PATH);
             }
@@ -323,14 +346,42 @@ static int event_handler(int type, int par1, int par2)
             }
             return 0;
 
+        case EVT_POINTERDOWN:
+            frontlight_drag_active = par1 <= FRONTLIGHT_GESTURE_WIDTH;
+            if (frontlight_drag_active) {
+                set_frontlight_from_y(par2);
+            }
+            return 1;
+
+        case EVT_POINTERMOVE:
+        case EVT_POINTERDRAG:
+            if (frontlight_drag_active) {
+                set_frontlight_from_y(par2);
+            }
+            return 1;
+
         case EVT_POINTERUP:
-            toggle_frontlight();
+            if (frontlight_drag_active) {
+                set_frontlight_from_y(par2);
+                frontlight_drag_active = false;
+            } else {
+                toggle_frontlight();
+            }
+            return 1;
+
+        case EVT_POINTERCANCEL:
+            frontlight_drag_active = false;
+            return 1;
+
+        case EVT_POINTERLONG:
+        case EVT_POINTERHOLD:
             return 1;
 
         case EVT_EXIT:
             ClearTimerByName(POLL_TIMER);
             ClearTimerByName(KEEP_AWAKE_TIMER);
             iv_sleepmode(initial_sleep_mode);
+            SetPanelType(initial_panel_type);
             NetDisconnect();
             WiFiPower(0);
             if (frontlight_available) {
